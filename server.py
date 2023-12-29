@@ -1,19 +1,47 @@
 from flask import Flask, request,render_template,jsonify
 from googleapiclient.discovery import build
+from flask_cors import CORS
 import re
 import joblib
 import pickle
 import os
 from dotenv import load_dotenv
 
+
 load_dotenv()
 
-app = Flask(__name__)
+from flask_cors import CORS
 
+app = Flask(__name__)
+CORS(app)
+CORS(app, resources={r"/get_comments": {"origins": "http://localhost:3000"}})
 # Load sentiment analysis model and vectorizer
 model = joblib.load('svm_model.pkl')
 with open('vectorizer.pkl', 'rb') as file:
     vectorizer = pickle.load(file)
+
+# Function to predict sentiment (negative or positive) for a comment
+def predict_sentiment(comment):
+    text_vectorized = vectorizer.transform([comment]).toarray()
+    prediction = model.predict(text_vectorized)[0]
+    return "Negative" if prediction == 0 else "Positive"
+
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+@app.route('/detect', methods=['POST'])
+def detect_sentiment():
+    data = request.get_json()
+    comment = data.get('comment')
+    
+    if not comment:
+        return jsonify({'error': 'No comment provided'})
+    
+    sentiment = predict_sentiment(comment)
+    
+    return jsonify({'sentiment': sentiment})
+
 
 # Function to extract video ID from YouTube URL
 def get_video_id(video_url):
@@ -98,6 +126,8 @@ def get_comments():
         'total_comments_count': total_comments_count,
         'negative_comments_count': negative_comments_count
     })
+
+    
 
 if __name__ == '__main__':
     app.run(debug=True)
